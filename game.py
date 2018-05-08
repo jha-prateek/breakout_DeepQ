@@ -5,8 +5,8 @@ import numpy as np
 import cv2
 from collections import deque
 from keras.models import Sequential, load_model
-from keras.layers import Dense, Flatten, Dropout, Input
-from keras.layers.convolutional import Conv2D
+from keras.layers import Dense, Flatten, Dropout
+from keras.layers.convolutional import Conv2D, MaxPooling2D
 from keras.optimizers import Adam
 from keras import backend as K
 
@@ -15,14 +15,14 @@ from keras import backend as K
 
 # print(K.image_data_format())
 
-EPISODES = 400
+EPISODES = 201
 FRAME_NUM = 4
-ROWS = 46
-COLS = 30
+ROWS = 80
+COLS = 60
 STATE_STACK = deque([np.zeros((ROWS,COLS), dtype=np.int) for i in range(FRAME_NUM)],
                     maxlen=FRAME_NUM)
 
-predictions = []
+# predictions = []
 
 class Agent:
     def __init__(self, action_size, model_name):
@@ -47,24 +47,20 @@ class Agent:
             return model
         else:
             model = Sequential()
-            model.add(Conv2D(32, (3, 3), padding='same',
+            model.add(Conv2D(32, 8, padding='same',
                              activation='relu',
                              data_format='channels_last',
                              input_shape=(ROWS, COLS, FRAME_NUM)))
-            model.add(Dropout(0.25))
 
-            model.add(Conv2D(64, (3, 3), padding='same',
-                             activation='relu'))
-            model.add(Dropout(0.25))
+            model.add(Conv2D(64, 4, padding='same', activation='relu'))
+            model.add(MaxPooling2D(pool_size=(3, 3)))
 
-            model.add(Conv2D(128, (3, 3), padding='same',
-                             activation='relu'))
-            model.add(Dropout(0.25))
+            model.add(Conv2D(64, 3, padding='same', activation='relu'))
 
             model.add(Flatten())
             model.add(Dense(512, activation='relu'))
+            model.add(Dropout(0.7))
 
-            model.add(Dropout(0.5))
             model.add(Dense(self.action_size))
             model.compile(loss='mse', optimizer=Adam(lr=0.003))
 
@@ -85,7 +81,7 @@ class Agent:
             return random.randrange(self.action_size)
         else:
             action = self.model.predict(state)[0]
-            predictions.append(action)
+            # predictions.append(action)
             return np.argmax(action)
 
     def state_preprocess(self, state):
@@ -116,7 +112,7 @@ class Agent:
             y_batch.append(y_target[0])
 
         self.model.fit(np.array(x_batch), np.array(y_batch), batch_size=batch_size,
-                       epochs=2, verbose=0)
+                       epochs=1, verbose=0)
 
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
@@ -126,8 +122,9 @@ if __name__ == "__main__":
     action_size = env.action_space.n
     agent = Agent(action_size, "Breakout_1")
 
-    batch_size = 32
+    batch_size = 256
     scores = []
+
     for e in range(EPISODES):
         observation = env.reset()
 
@@ -135,10 +132,11 @@ if __name__ == "__main__":
 
         agent.random_acts = 0
 
-        # done = False
+        done = False
         total_reward = 0
 
-        for i in range(500):
+        while not done:
+        # for i in range(500):
             # env.render()
 
             action = agent.act(state)
@@ -173,7 +171,7 @@ if __name__ == "__main__":
 
         if ( e %100 == 0):
             print("Average Score of {} Episodes: ".format(e) ,np.mean(scores))
-            agent.save_model()
-            print(np.sum(predictions, axis=0))
+            # agent.save_model()
+            # print(np.sum(predictions, axis=0))
 
 cv2.destroyAllWindows()
